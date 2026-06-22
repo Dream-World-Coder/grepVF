@@ -1,0 +1,58 @@
+rules:
+  - id: tls-verify-disabled
+    languages: [python]
+    severity: ERROR
+    message: >-
+      TLS certificate verification is disabled, allowing man-in-the-middle
+      attacks against this connection. Remove verify=False (or set it to
+      True / a CA bundle path). If this is for local development against a
+      self-signed cert, use a properly configured CA bundle instead of
+      disabling verification entirely.
+    metadata:
+      cwe: "CWE-295"
+      category: tls
+      hazard_point: 9
+      references:
+        - "https://owasp.org/www-community/vulnerabilities/Improper_Certificate_Validation"
+    patterns:
+      - pattern-either:
+          - pattern: requests.get(..., verify=False, ...)
+          - pattern: requests.post(..., verify=False, ...)
+          - pattern: requests.put(..., verify=False, ...)
+          - pattern: requests.delete(..., verify=False, ...)
+          - pattern: requests.patch(..., verify=False, ...)
+          - pattern: requests.request(..., verify=False, ...)
+          - pattern: requests.Session(...).request(..., verify=False, ...)
+          - pattern: httpx.Client(..., verify=False, ...)
+          - pattern: httpx.AsyncClient(..., verify=False, ...)
+          - pattern: httpx.get(..., verify=False, ...)
+          - pattern: ssl._create_unverified_context(...)
+
+  - id: tls-context-check-hostname-disabled
+    languages: [python]
+    severity: ERROR
+    message: >-
+      check_hostname=False on an SSL context disables hostname verification,
+      permitting MITM attacks even if certificate validation itself is
+      otherwise enabled.
+    metadata:
+      cwe: "CWE-295"
+      category: tls
+      hazard_point: 8
+    patterns:
+      - pattern: $CTX.check_hostname = False
+
+  - id: tls-cert-verify-none
+    languages: [python]
+    severity: ERROR
+    message: >-
+      ssl.CERT_NONE disables certificate validation entirely. Use
+      ssl.CERT_REQUIRED with a trusted CA bundle.
+    metadata:
+      cwe: "CWE-295"
+      category: tls
+      hazard_point: 9
+    patterns:
+      - pattern-either:
+          - pattern: $CTX.verify_mode = ssl.CERT_NONE
+          - pattern: ssl.wrap_socket(..., cert_reqs=ssl.CERT_NONE, ...)

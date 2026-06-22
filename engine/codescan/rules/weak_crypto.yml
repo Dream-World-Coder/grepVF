@@ -1,0 +1,81 @@
+rules:
+  - id: weak-crypto-md5
+    languages: [python]
+    severity: ERROR
+    message: >-
+      MD5 is cryptographically broken (collision attacks since 2004 — see
+      Wang et al., CRYPTO 2004) and must not be used for password hashing,
+      signatures, or integrity checks. Use hashlib.sha256 or, for password
+      storage specifically, a dedicated KDF like bcrypt/argon2/scrypt.
+    metadata:
+      cwe: "CWE-327"
+      category: weak_crypto
+      hazard_point: 7
+      references:
+        - "https://eprint.iacr.org/2004/199"
+    patterns:
+      - pattern-either:
+          - pattern: hashlib.md5(...)
+          - pattern: hashlib.new("md5", ...)
+          - pattern: hashlib.new('md5', ...)
+
+  - id: weak-crypto-sha1
+    languages: [python]
+    severity: WARNING
+    message: >-
+      SHA-1 is deprecated for security purposes (full collision demonstrated
+      by Stevens et al., 2017 — SHAttered). Use SHA-256 or stronger for any
+      new cryptographic signature, certificate, or integrity-check usage.
+    metadata:
+      cwe: "CWE-327"
+      category: weak_crypto
+      hazard_point: 6
+      references:
+        - "https://shattered.io"
+    patterns:
+      - pattern-either:
+          - pattern: hashlib.sha1(...)
+          - pattern: hashlib.new("sha1", ...)
+          - pattern: hashlib.new('sha1', ...)
+
+  - id: weak-crypto-aes-ecb
+    languages: [python]
+    severity: ERROR
+    message: >-
+      AES in ECB mode encrypts identical plaintext blocks to identical
+      ciphertext blocks, leaking structural information about the
+      plaintext. Use AES-GCM (authenticated encryption) or at minimum
+      AES-CBC with a random IV.
+    metadata:
+      cwe: "CWE-327"
+      category: weak_crypto
+      hazard_point: 8
+    patterns:
+      - pattern-either:
+          - pattern: $CIPHER.new($KEY, $MODULE.MODE_ECB)
+          - pattern: Cipher(algorithms.AES($KEY), modes.ECB(), ...)
+
+  - id: weak-random-for-security
+    languages: [python]
+    severity: WARNING
+    message: >-
+      The `random` module is not cryptographically secure (it is a
+      Mersenne Twister PRNG, fully predictable from enough output). Do not
+      use it to generate tokens, passwords, session IDs, or any
+      security-sensitive value. Use the `secrets` module instead
+      (secrets.token_hex, secrets.token_urlsafe, secrets.randbelow).
+    metadata:
+      cwe: "CWE-338"
+      category: weak_crypto
+      hazard_point: 6
+    patterns:
+      - pattern-either:
+          - pattern: random.randint(...)
+          - pattern: random.random()
+          - pattern: random.choice(...)
+      - pattern-inside: |
+          def $FUNC(...):
+            ...
+      - metavariable-regex:
+          metavariable: $FUNC
+          regex: (?i).*(token|password|secret|session|otp|reset|auth|key).*

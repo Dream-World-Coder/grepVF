@@ -36,6 +36,13 @@ Hard cap so a single absurdly large generated file doesn't stall the scan.
 
 ---
 
+`_probably_binary`:
+Cheap binary sniff: read the first chunk and check for a NUL byte, which
+essentially never appears in legitimate text source files. Avoids
+shelling out to `file` and avoids false-classifying binary blobs as code.
+
+---
+
 ```py
 def scan_files(
     root_path: str,

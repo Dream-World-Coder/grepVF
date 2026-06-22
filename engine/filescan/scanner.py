@@ -26,11 +26,6 @@ def _matches_any(filename: str, patterns: list[str]) -> bool:
 
 
 def _probably_binary(path: Path, sniff_bytes: int = 1024) -> bool:
-    """
-    Cheap binary sniff: read the first chunk and check for a NUL byte, which
-    essentially never appears in legitimate text source files. Avoids
-    shelling out to `file` and avoids false-classifying binary blobs as code.
-    """
     try:
         with open(path, "rb") as fh:
             chunk = fh.read(sniff_bytes)
@@ -43,11 +38,11 @@ def _probably_binary(path: Path, sniff_bytes: int = 1024) -> bool:
 # =====
 def scan_files(
     root_path: str,
-    max_file_size_bytes: int = configs["DEFAULT_MAX_FILE_SIZE_BYTES"],
+    max_file_size_bytes: int = configs.DEFAULT_MAX_FILE_SIZE_BYTES,
     extra_skip_dirs: set[str] | None = None,
 ) -> RoutedFiles:
 
-    skip_dirs = configs["SKIP_DIRS"] | (extra_skip_dirs or set())
+    skip_dirs = configs.SKIP_DIRS | (extra_skip_dirs or set())
     routed = RoutedFiles()
     repo_root = Path(root_path).resolve()
 
@@ -74,18 +69,18 @@ def scan_files(
                 continue  # empty files carry no findings, skip silently
 
             is_dedicated_secret = _matches_any(
-                filename, configs["DEDICATED_SECRET_PATTERNS"]
+                filename, configs.DEDICATED_SECRET_PATTERNS
             )
-            is_manifest = _matches_any(filename, configs["MANIFEST_PATTERNS"])
+            is_manifest = _matches_any(filename, configs.MANIFEST_PATTERNS)
             ext = abs_path.suffix.lower()
             is_code_ext = (
-                ext in configs["CODE_EXTS"]
-                or filename in configs["CODE_FILES"]
+                ext in configs.CODE_EXTS
+                or filename in configs.CODE_FILES
                 or filename.startswith("Dockerfile.")
             )
 
             if not (is_dedicated_secret or is_manifest or is_code_ext):
-                continue  # unknown file type, e.g. .md, .png — nothing to scan
+                continue  # unknown file type, e.g. .md, .png -- nothing to scan
 
             if _probably_binary(abs_path):
                 routed.skipped_binary.append(rel_path)
@@ -97,7 +92,7 @@ def scan_files(
             if is_manifest:
                 routed.manifests.append(rel_path)
 
-            # Source code files go to BOTH code and secrets queues — see
+            # Source code files go to BOTH code and secrets queues -- see
             # module docstring for why this is intentional, not an oversight.
             if is_code_ext:
                 routed.code.append(rel_path)

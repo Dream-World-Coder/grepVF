@@ -1,7 +1,21 @@
+from dataclasses import dataclass
+from typing import Final
+
+
+@dataclass(frozen=True)
+class Config:
+    DEDICATED_SECRET_PATTERNS: list[str]
+    MANIFEST_PATTERNS: list[str]
+    CODE_EXTS: set[str]
+    SKIP_DIRS: set[str]
+    CODE_FILES: set[str]
+    DEFAULT_MAX_FILE_SIZE_BYTES: int
+
+
 # configs
 # ========
-configs: dict[str, list[str] | set[str] | int] = {
-    "DEDICATED_SECRET_PATTERNS": [
+configs: Final = Config(
+    DEDICATED_SECRET_PATTERNS=[
         ".env",
         ".env.*",
         "*.env",
@@ -19,7 +33,7 @@ configs: dict[str, list[str] | set[str] | int] = {
         ".pypirc",
         ".netrc",
     ],
-    "MANIFEST_PATTERNS": [
+    MANIFEST_PATTERNS=[
         "requirements.txt",
         "requirements-*.txt",
         "Pipfile",
@@ -42,7 +56,7 @@ configs: dict[str, list[str] | set[str] | int] = {
         "Cargo.toml",
         "Cargo.lock",
     ],
-    "CODE_EXTS": {
+    CODE_EXTS={
         ".py",
         ".js",
         ".jsx",
@@ -64,7 +78,7 @@ configs: dict[str, list[str] | set[str] | int] = {
         ".tf",
         ".dockerfile",
     },
-    "SKIP_DIRS": {
+    SKIP_DIRS={
         ".git",
         "node_modules",
         "vendor",
@@ -83,11 +97,11 @@ configs: dict[str, list[str] | set[str] | int] = {
         ".next",
         ".nuxt",
     },
-    "CODE_FILES": {
+    CODE_FILES={
         "Dockerfile",
         "Makefile",
         "Jenkinsfile",
         "Vagrantfile",
     },
-    "DEFAULT_MAX_FILE_SIZE_BYTES": 5 * 1024 * 1024,  # 5 MB
-}
+    DEFAULT_MAX_FILE_SIZE_BYTES=5 * 1024 * 1024,
+)

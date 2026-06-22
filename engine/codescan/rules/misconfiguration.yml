@@ -1,0 +1,117 @@
+rules:
+  - id: debug-mode-enabled
+    languages: [python]
+    severity: WARNING
+    message: >-
+      DEBUG=True in a production code path can leak stack traces, source
+      code, environment variables, and internal paths to any client that
+      triggers an unhandled exception. Ensure this is never True in a
+      production deployment — drive it from an environment variable that
+      defaults to False.
+    metadata:
+      cwe: "CWE-489"
+      category: misconfiguration
+      hazard_point: 6
+    patterns:
+      - pattern-either:
+          - pattern: DEBUG = True
+          - pattern: app.debug = True
+          - pattern: app.run(..., debug=True, ...)
+
+  - id: cors-wildcard-origin
+    languages: [python]
+    severity: WARNING
+    message: >-
+      A wildcard CORS origin ("*") allows any website to make
+      credentialed-or-not requests to this API from a browser, defeating
+      same-origin protections. Restrict to an explicit allowlist of trusted
+      origins.
+    metadata:
+      cwe: "CWE-942"
+      category: misconfiguration
+      hazard_point: 6
+    patterns:
+      - pattern-either:
+          - pattern: CORS_ALLOWED_ORIGINS = ["*"]
+          - pattern: CORS_ORIGIN_ALLOW_ALL = True
+          - pattern: |
+              CORSMiddleware(..., allow_origins=["*"], ...)
+
+  - id: hardcoded-django-secret-key
+    languages: [python]
+    severity: ERROR
+    message: >-
+      SECRET_KEY is hardcoded rather than sourced from environment/secret
+      storage. Django's SECRET_KEY signs sessions, password-reset tokens,
+      and CSRF tokens — if it leaks (e.g. via this repo being public or
+      shared), an attacker can forge any of those. Load from an environment
+      variable and rotate this value.
+    metadata:
+      cwe: "CWE-798"
+      category: misconfiguration
+      hazard_point: 8
+    patterns:
+      - pattern: SECRET_KEY = "..."
+
+  - id: insecure-cookie-flags
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Session/CSRF cookies without Secure and HttpOnly flags can be
+      transmitted over plaintext HTTP and read by client-side JavaScript
+      (XSS exfiltration). Set both flags to True in production.
+    metadata:
+      cwe: "CWE-614"
+      category: misconfiguration
+      hazard_point: 5
+    patterns:
+      - pattern-either:
+          - pattern: SESSION_COOKIE_SECURE = False
+          - pattern: SESSION_COOKIE_HTTPONLY = False
+          - pattern: CSRF_COOKIE_SECURE = False
+
+  - id: empty-database-password
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A database credential configuration has an empty PASSWORD value. If
+      this is loaded as-is in any environment, the database accepts
+      passwordless authentication for this user.
+    metadata:
+      cwe: "CWE-521"
+      category: misconfiguration
+      hazard_point: 7
+    pattern: |
+      {..., "PASSWORD": "", ...}
+
+  - id: dockerfile-add-remote-url
+    languages: [dockerfile]
+    severity: WARNING
+    message: >-
+      ADD pulling directly from a remote URL bypasses TLS-pinning and
+      content verification — if the URL is ever compromised or
+      MITM'd, this fetches and stages attacker-controlled content into the
+      image with no integrity check. Use a pinned, hash-verified download
+      via RUN + curl --fail with a checksum comparison instead.
+    metadata:
+      cwe: "CWE-494"
+      category: misconfiguration
+      hazard_point: 6
+    pattern-regex: (?i)^\s*ADD\s+https?://\S+\s+\S+\s*$
+
+  - id: dockerfile-hardcoded-secret-env
+    languages: [dockerfile]
+    severity: ERROR
+    message: >-
+      A secret-looking value is baked into the image via ENV. Anyone who
+      can pull the image (including from a registry believed to be
+      private, or via `docker history`) can recover this value — ENV
+      layers are not encrypted and persist in image history even if a
+      later layer overwrites the variable. Use build secrets (--mount=
+      type=secret) or inject at runtime instead.
+    metadata:
+      cwe: "CWE-798"
+      category: misconfiguration
+      hazard_point: 8
+    pattern-regex: (?i)^\s*ENV\s+\S*(password|secret|token|api_?key|credential)\S*[\s=].+$
+
