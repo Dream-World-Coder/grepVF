@@ -23,7 +23,7 @@ import httpx
 from dotenv import load_dotenv
 
 from engine.models import Finding
-from engine.patcher import ExtractedContext
+from engine.patcher.ast_context_extractor import ExtractedContext
 
 load_dotenv()
 

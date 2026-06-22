@@ -1,5 +1,5 @@
 """
-GrepVF — top-level scan orchestrator for SecureScan.
+GrepVF — core
 
 Pipeline order
 --------------
@@ -155,7 +155,7 @@ def _apply_patch_outcomes(
 
 class GrepVF:
     """
-    Orchestrates the full SecureScan pipeline for a single repository root.
+    Orchestrates the full GrepVF pipeline for a single repository root.
 
     Attributes
     ----------
@@ -197,7 +197,7 @@ class GrepVF:
           - Dry-run mode to inspect coverage before a long scan
           - Unit tests that only need to verify routing logic
         """
-        print(f"[SecureScan] Routing: {self.root_path}")
+        print(f"[GrepVF] Routing: {self.root_path}")
         self.files = scan_files(str(self.root_path))
         _print_routing_summary(self.files)
         return self.files
@@ -225,14 +225,14 @@ class GrepVF:
         # ------------------------------------------------------------------
         # Stage 1: file routing
         # ------------------------------------------------------------------
-        print(f"[SecureScan] Scanning: {self.root_path}")
+        print(f"[GrepVF] Scanning: {self.root_path}")
         t0 = time.perf_counter()
         self.files = await loop.run_in_executor(None, scan_files, root)
         _print_routing_summary(self.files)
         print(f"  ({_fmt(time.perf_counter() - t0)})")
 
         if self.files.total_routed == 0:
-            print("[SecureScan] No scannable files found — nothing to report.")
+            print("[GrepVF] No scannable files found — nothing to report.")
             self.report = aggregate([[], [], []])
             return self.report
 
@@ -256,7 +256,7 @@ class GrepVF:
         # to a thread pool so they don't block the event loop during the
         # CVE checker's HTTP calls.
         # ------------------------------------------------------------------
-        print("[SecureScan] Running scanners...")
+        print("[GrepVF] Running scanners...")
         t0 = time.perf_counter()
 
         entropy_task = loop.run_in_executor(
@@ -297,7 +297,7 @@ class GrepVF:
         )
 
         print(
-            f"[SecureScan] {self.report.total_after_dedup} unique finding(s) \n({self.report.duplicates_removed} duplicate(s) removed)"
+            f"[GrepVF] {self.report.total_after_dedup} unique finding(s) \n({self.report.duplicates_removed} duplicate(s) removed)"
         )
         _print_severity_breakdown(self.report)
 
@@ -306,7 +306,7 @@ class GrepVF:
         # ------------------------------------------------------------------
         if patch and self.report.findings:
             n = len(self.report.findings)
-            print(f"[SecureScan] Generating patches for {_plural(n, 'finding')}...")
+            print(f"[GrepVF] Generating patches for {_plural(n, 'finding')}...")
             t0 = time.perf_counter()
 
             self.patch_outcomes = await generate_patches_for_findings_async(
@@ -316,7 +316,7 @@ class GrepVF:
             _print_patch_summary(self.patch_outcomes)
             print(f"  ({_fmt(time.perf_counter() - t0)})")
 
-        print(f"[SecureScan] Done — {_fmt(time.perf_counter() - t_total)} total")
+        print(f"[GrepVF] Done — {_fmt(time.perf_counter() - t_total)} total")
         return self.report
 
     def run_scan(self, patch: bool = False) -> AggregatedReport:

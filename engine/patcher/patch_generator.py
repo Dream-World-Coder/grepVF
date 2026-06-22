@@ -14,14 +14,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from engine.models import Finding, FixType
-from engine.patcher import (
+from engine.patcher.ast_context_extractor import extract_minimal_context
+from engine.patcher.deterministic_fixes import try_deterministic_fix
+from engine.patcher.llm_patcher import (
     LlmPatchError,
-    extract_minimal_context,
     generate_llm_patch_async,
     is_llm_configured,
-    try_deterministic_fix,
-    validate_patch,
 )
+from engine.patcher.patch_validator import validate_patch
 
 RULES_DIR = Path(__file__).parent.parent / "scanner" / "rules"
 
