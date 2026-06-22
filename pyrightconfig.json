@@ -1,4 +1,5 @@
 {
     "venvPath": ".",
     "venv": ".venv",
+    "ignore": ["main.py", "tests/*", "engine/sarif/*"],
 }
