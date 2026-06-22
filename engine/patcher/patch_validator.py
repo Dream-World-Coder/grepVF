@@ -29,8 +29,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from codescan import SECRET_REGEXES
-from models import Finding
+from engine.codescan import SECRET_REGEXES
+from engine.models import Finding
 
 SEMGREP_REVALIDATION_TIMEOUT_SECONDS = 30
 

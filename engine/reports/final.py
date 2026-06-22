@@ -28,8 +28,9 @@ Two responsibilities:
 
 from collections import defaultdict
 from dataclasses import dataclass, field
+from typing import Any
 
-from models import Category, Finding, Severity
+from engine.models import Category, Finding, Severity
 
 # Filename/path fragments that suggest a file is reachable from untrusted
 # network input — used only as a coarse hazard-score signal, never to
@@ -74,7 +75,7 @@ class AggregatedReport:
             for f in self.findings
         )
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "summary": {
                 "total_findings": self.total_after_dedup,
@@ -147,7 +148,7 @@ def aggregate(scan_results_findings: list[list[Finding]]) -> AggregatedReport:
         groups[_dedup_key(f)].append(f)
 
     deduped: list[Finding] = []
-    for key, candidates in groups.items():
+    for _, candidates in groups.items():
         if len(candidates) == 1:
             deduped.append(candidates[0])
             continue
@@ -186,7 +187,11 @@ def aggregate(scan_results_findings: list[list[Finding]]) -> AggregatedReport:
     for f in deduped:
         f.hazard_score = get_hazard_score(f)
 
-    deduped.sort(key=lambda f: f.hazard_score, reverse=True)
+    # deduped.sort(key=lambda f: f.hazard_score, reverse=True)
+    deduped.sort(
+        key=lambda f: f.hazard_score if f.hazard_score is not None else float("-inf"),
+        reverse=True,
+    )
 
     counts_by_severity: dict[str, int] = defaultdict(int)
     counts_by_category: dict[str, int] = defaultdict(int)

@@ -20,7 +20,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from models import Category, Finding, ScanResult, Severity
+from engine.models import Category, Finding, ScanResult, Severity
 
 RULES_DIR = Path(__file__).parent / "rules"
 SEMGREP_TIMEOUT_SECONDS = 300

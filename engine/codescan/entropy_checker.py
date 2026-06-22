@@ -20,7 +20,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from models import Category, Finding, ScanResult, Severity
+from engine.models import Category, Finding, ScanResult, Severity
 
 DEFAULT_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024  # 2 MB; secrets are never huge
 ENTROPY_THRESHOLD = 4.3  # bits/char; tuned against benchmark fixture
@@ -28,7 +28,7 @@ MIN_TOKEN_LENGTH = 20  # shorter strings rarely carry real secrets
 MAX_TOKEN_LENGTH = 200  # avoid flagging minified JS blobs etc.
 
 # (compiled_pattern, rule_id, severity, human message)
-SECRET_REGEXES: list[tuple[re.Pattern, str, Severity, str]] = [
+SECRET_REGEXES: list[tuple[re.Pattern[str], str, Severity, str]] = [
     (
         re.compile(r"AKIA[0-9A-Z]{16}"),
         "aws-access-key-id",

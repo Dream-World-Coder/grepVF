@@ -21,8 +21,9 @@ from dataclasses import dataclass
 
 import httpx
 from dotenv import load_dotenv
-from models import Finding
-from patcher.ast_context_extractor import ExtractedContext
+
+from engine.models import Finding
+from engine.patcher import ExtractedContext
 
 load_dotenv()
 

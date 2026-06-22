@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from models import Finding
+from engine.models import Finding
 
 
 @dataclass

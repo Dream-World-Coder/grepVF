@@ -20,8 +20,10 @@ import asyncio
 from dataclasses import dataclass
 
 import httpx
-from lockfile_parser import Dependency
-from models import Category, Finding, ScanResult, Severity
+
+from engine.models import Category, Finding, ScanResult, Severity
+
+from .lockfile_parser import Dependency  # relative
 
 OSV_API_BASE = "https://api.osv.dev/v1"
 BATCH_SIZE = 100  # OSV's documented batch query limit

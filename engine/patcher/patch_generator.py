@@ -13,14 +13,15 @@ import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 
-from patcher.ast_context_extractor import extract_minimal_context
-from patcher.deterministic_fixes import try_deterministic_fix
-from patcher.llm_patcher import (
+from engine.models import Finding, FixType
+from engine.patcher import (
     LlmPatchError,
+    extract_minimal_context,
     generate_llm_patch_async,
     is_llm_configured,
+    try_deterministic_fix,
+    validate_patch,
 )
-from patcher.patch_validator import validate_patch
 
 RULES_DIR = Path(__file__).parent.parent / "scanner" / "rules"
 

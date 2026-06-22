@@ -1,0 +1,13 @@
+{
+    "lsp": {
+        "pyright": {
+            "initialization_options": {
+                "settings": {
+                    "python": {
+                        "pythonPath": ".venv/bin/python",
+                    },
+                },
+            },
+        },
+    },
+}
