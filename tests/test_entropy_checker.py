@@ -183,13 +183,13 @@ class TestScanFileForSecrets:
 
     def test_high_entropy_string_detected(self):
         # 34-char mixed alphanum token with high entropy — no matching regex
-        content = 'token = "aB3dEf7GhIjKlMnOpQrStUvWxYz012345"\n'
+        content = 'my_data_blob = "aB3dEf7GhIjKlMnOpQrStUvWxYz012345"\n'
         findings = scan_file_for_secrets("app.py", content)
         entropy_findings = [f for f in findings if f.rule_id == "high-entropy-string"]
         assert len(entropy_findings) >= 1
 
     def test_high_entropy_finding_is_medium_severity(self):
-        content = 'token = "aB3dEf7GhIjKlMnOpQrStUvWxYz012345"\n'
+        content = 'my_data_blob = "aB3dEf7GhIjKlMnOpQrStUvWxYz012345"\n'
         findings = scan_file_for_secrets("app.py", content)
         for f in findings:
             if f.rule_id == "high-entropy-string":

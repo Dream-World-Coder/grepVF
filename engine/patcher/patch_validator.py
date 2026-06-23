@@ -1,26 +1,6 @@
 """
-Patch Validator — re-checks a proposed patch (deterministic OR LLM-
-generated) against the SAME rule that originally flagged it, before the
-patch is ever shown to a developer.
-
-This exists because an LLM-generated fix can plausibly look right while
-still being wrong — e.g. "fixing" a SQL injection by switching to an
-f-string with different formatting that the original regex/taint rule
-still flags, or a fix that breaks syntactically. Re-validating closes the
-loop the deck promises: "every patch is verified with rescan or formal
-grammars" before a developer ever sees it.
-
-Two validation strategies depending on what produced the original finding:
-
-1. **Semgrep-sourced findings** (semantics_checker): write the patched
-   snippet to a temp file and re-run the SAME Semgrep rule against just
-   that file. If the rule still fires, the patch failed.
-2. **Regex-sourced findings** (entropy_checker): re-run the same regex
-   against the patched line. If it still matches, the patch failed.
-3. **Syntax check** (always, regardless of source): the patched snippet
-   must parse as valid Python. A patch that breaks syntax is rejected
-   even if it would have satisfied the original rule, since "fixes the
-   security issue but doesn't compile" is not a usable patch.
+Patch Validator — re-checks a proposed patch against its originating rule.
+See `engine/patcher/docs.md` for validation strategies.
 """
 
 import ast
@@ -83,14 +63,21 @@ def _revalidate_against_semgrep_rule(
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=SEMGREP_REVALIDATION_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:
         return ValidationResult(passed=False, reason="semgrep revalidation timed out")
+    except FileNotFoundError:
+        return ValidationResult(
+            passed=False, reason="semgrep executable not found on PATH"
+        )
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 
-    if not proc.stdout.strip():
+    stdout = proc.stdout or ""
+    if not stdout.strip():
         # No output at all is suspicious (semgrep usually emits a JSON
         # skeleton even with zero findings) — treat as a failed validation
         # rather than silently assuming success.
@@ -101,7 +88,7 @@ def _revalidate_against_semgrep_rule(
     import json
 
     try:
-        data = json.loads(proc.stdout)
+        data = json.loads(stdout)
     except json.JSONDecodeError:
         return ValidationResult(
             passed=False, reason="could not parse semgrep revalidation output"

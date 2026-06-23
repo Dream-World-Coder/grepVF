@@ -1,28 +1,6 @@
 """
-SARIF Writer — serializes an AggregatedReport into SARIF 2.1.0, the format
-`github/codeql-action/upload-sarif` consumes to populate the native GitHub
-Security tab and inline PR annotations under "Files changed."
-
-Spec reference: https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html
-
-Key structural decisions:
-
-- **One `rule` entry per unique rule_id**, deduplicated, with the rule's
-  description/help text attached once — not repeated on every result. This
-  is what makes the Security tab's per-rule grouping and the rule detail
-  panel work correctly.
-- **`partialFingerprints`** are set on every result using `Finding.dedup_key()`.
-  This is what lets GitHub recognize "this is the same finding as last scan"
-  across commits even when line numbers shift slightly, so a finding doesn't
-  get marked as newly-introduced on every push just because an unrelated
-  earlier line in the file changed.
-- **Severity mapping** goes through `Severity.sarif_level` (CRITICAL/HIGH ->
-  "error", MEDIUM -> "warning", LOW -> "note") since SARIF's `level` field
-  only has those three meaningful values for results.
-- **`security-severity`** (a `properties` bag entry, not part of core SARIF)
-  is what GitHub's Security tab actually uses to color-code and sort by
-  severity in its UI — this is a de facto GitHub extension, not core SARIF,
-  but omitting it means everything shows up uncategorized in the tab.
+SARIF Writer — serializes an AggregatedReport into SARIF 2.1.0 format.
+See `engine/sarif/docs.md` for structure decisions and GitHub-specific tags.
 """
 
 from __future__ import annotations
@@ -30,8 +8,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from aggregator.report_aggregator import AggregatedReport
-from scanner.models import Finding
+from engine.models import Finding
+from engine.reports.final import AggregatedReport
 
 SARIF_SCHEMA_URL = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
 SARIF_VERSION = "2.1.0"
