@@ -1,12 +1,6 @@
 """
-Patch Generator — orchestrates the full patch pipeline for a single
-Finding, matching the flowchart: Auto-fixable? -> deterministic rule table
--> (fail) -> LLM with minimal AST context -> validate -> ready for review.
-
-This is the only module that callers (the CLI, the FastAPI webhook
-receiver) should import to get a patch — it owns the decision of which
-underlying strategy to try and in what order, so that order is defined in
-exactly one place.
+Patch Generator — orchestrates the full patch pipeline for a single Finding.
+See `engine/patcher/docs.md` for flowchart and architecture notes.
 """
 
 import asyncio

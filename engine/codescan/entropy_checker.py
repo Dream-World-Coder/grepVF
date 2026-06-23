@@ -1,18 +1,6 @@
 """
-Entropy Checker — detects hardcoded secrets via two complementary methods:
-
-1. Regex matching against known credential *shapes* (AWS keys, Stripe keys,
-   JWTs, generic `api_key = "..."` assignments). High precision, but only
-   catches secret formats we've explicitly enumerated.
-2. Shannon-entropy scanning over string literals as a catch-all for secrets
-   that don't match any known shape (custom internal tokens, random API
-   keys with no recognizable prefix).
-
-Running only regex misses novel secret formats; running only entropy
-produces too many false positives on things like UUIDs, hashes, and base64
-config blobs. Combining both, with regex matches taking priority and entropy
-only flagged at MEDIUM severity, is the standard approach used by tools like
-GitLeaks and TruffleHog.
+Entropy Checker — detects hardcoded secrets via Regex and Shannon-entropy.
+See `engine/codescan/docs.md` for algorithm details and design decisions.
 """
 
 import math

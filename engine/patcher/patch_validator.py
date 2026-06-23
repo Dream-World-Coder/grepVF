@@ -1,26 +1,6 @@
 """
-Patch Validator — re-checks a proposed patch (deterministic OR LLM-
-generated) against the SAME rule that originally flagged it, before the
-patch is ever shown to a developer.
-
-This exists because an LLM-generated fix can plausibly look right while
-still being wrong — e.g. "fixing" a SQL injection by switching to an
-f-string with different formatting that the original regex/taint rule
-still flags, or a fix that breaks syntactically. Re-validating closes the
-loop the deck promises: "every patch is verified with rescan or formal
-grammars" before a developer ever sees it.
-
-Two validation strategies depending on what produced the original finding:
-
-1. **Semgrep-sourced findings** (semantics_checker): write the patched
-   snippet to a temp file and re-run the SAME Semgrep rule against just
-   that file. If the rule still fires, the patch failed.
-2. **Regex-sourced findings** (entropy_checker): re-run the same regex
-   against the patched line. If it still matches, the patch failed.
-3. **Syntax check** (always, regardless of source): the patched snippet
-   must parse as valid Python. A patch that breaks syntax is rejected
-   even if it would have satisfied the original rule, since "fixes the
-   security issue but doesn't compile" is not a usable patch.
+Patch Validator — re-checks a proposed patch against its originating rule.
+See `engine/patcher/docs.md` for validation strategies.
 """
 
 import ast

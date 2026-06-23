@@ -1,19 +1,6 @@
 """
-CVE Checker — audits resolved dependency versions against the OSV.dev
-vulnerability database.
-
-Design notes:
-- Uses OSV's `querybatch` endpoint rather than looping one `query` call per
-  package. A real lockfile easily has 200+ transitive dependencies; batching
-  keeps this to a handful of HTTP round-trips instead of hundreds.
-- Sends ONLY package name + version + ecosystem to the external API — never
-  source code. This is what makes the "source code never leaves the network"
-  claim in the banking deployment model true even though this specific
-  scanner does call out to the internet.
-- `querybatch` returns vulnerability IDs only (no full details) to keep the
-  batch endpoint fast; we then resolve full details via a second call to
-  `/v1/vulns/{id}` only for the IDs that actually came back, not for every
-  dependency.
+CVE Checker — queries OSV.dev to find known vulnerabilities in pinned dependencies.
+See `engine/codescan/docs.md` for batching architecture and privacy notes.
 """
 
 import asyncio

@@ -1,19 +1,6 @@
 """
-Semantics Checker — wraps Semgrep to run AST-aware, taint-tracking analysis
-across the code queue using our custom rule registry (scanner/rules/).
-
-Two things this module does beyond "shell out to semgrep":
-
-1. Normalizes Semgrep's JSON output into our shared `Finding` model so the
-   aggregator never needs to know which engine produced a finding.
-
-2. Runs a small set of "structural absence" checks directly in Python
-   instead of via Semgrep. Semgrep's pattern language is built to match the
-   *presence* of a pattern; checks like "this Dockerfile has no USER
-   directive anywhere" are absence-based and are fragile/unreliable to
-   express as a Semgrep pattern (confirmed during development — see
-   `_check_dockerfile_missing_user`). Splitting these into a dedicated
-   Python pass is more maintainable than fighting the rule grammar.
+Semantics Checker — wraps Semgrep to run AST-aware, taint-tracking analysis.
+See `engine/codescan/docs.md` for normalization and structural-absence checks.
 """
 
 import json
