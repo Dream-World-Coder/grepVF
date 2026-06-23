@@ -13,5 +13,6 @@ pygments==2.20.0
 pytest==9.1.1
 python-dotenv==1.2.2
 requests==2.34.2
+semgrep>=1.78.0
 typing-extensions==4.15.0
 urllib3==2.7.0

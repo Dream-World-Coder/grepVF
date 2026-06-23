@@ -14,65 +14,71 @@
 name: Build and publish engine image
 
 on:
-    push:
-        tags:
-            - "v*.*.*"
+  push:
+    tags:
+      - "v*.*.*"
 
 jobs:
-    publish:
-        runs-on: ubuntu-latest
-        permissions:
-            contents: read
-            packages: write
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-            - name: Run test suite before publishing
-              run: |
-                  python3 -m venv venv
-                  . venv/bin/activate
-                  pip install -r requirements.txt
-                  pytest tests/ -v
-              # Deliberately a hard gate: a tag that doesn't pass the test suite
-              # never reaches GHCR. This is the same role the deck's "CI gate
-              # blocks merge on unresolved CRITICAL" plays for consumer repos —
-              # here it's the engine repo refusing to publish a broken image.
+      - name: Run test suite before publishing
+        run: |
+          python3 -m venv venv
+          . venv/bin/activate
+          pip install -r requirements.txt
+          pytest tests/ -v
+        # Deliberately a hard gate: a tag that doesn't pass the test suite
+        # never reaches GHCR. This is the same role the deck's "CI gate
+        # blocks merge on unresolved CRITICAL" plays for consumer repos —
+        # here it's the engine repo refusing to publish a broken image.
 
-            - name: Extract version from tag
-              id: version
-              run: |
-                  FULL_TAG="${GITHUB_REF_NAME}"          # e.g. v1.3.0
-                  MAJOR_TAG="${FULL_TAG%%.*}"             # e.g. v1
-                  echo "full=${FULL_TAG}" >> "$GITHUB_OUTPUT"
-                  echo "major=${MAJOR_TAG}" >> "$GITHUB_OUTPUT"
+      - name: Extract version from tag
+        id: version
+        run: |
+          FULL_TAG="${GITHUB_REF_NAME}"          # e.g. v1.3.0
+          MAJOR_TAG="${FULL_TAG%%.*}"             # e.g. v1
+          # Docker requires repository names to be strictly lowercase
+          OWNER="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "full=${FULL_TAG}" >> "$GITHUB_OUTPUT"
+          echo "major=${MAJOR_TAG}" >> "$GITHUB_OUTPUT"
+          echo "owner=${OWNER}" >> "$GITHUB_OUTPUT"
 
-            - name: Log in to GHCR
-              uses: docker/login-action@v3
-              with:
-                  registry: ghcr.io
-                  username: ${{ github.actor }}
-                  password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v3
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-            - name: Build and push image
-              uses: docker/build-push-action@v6
-              with:
-                  context: .
-                  push: true
-                  # multi-arch build so the image works on both Intel and ARM
-                  # GitHub-hosted/self-hosted runners without a separate manifest
-                  platforms: linux/amd64,linux/arm64
-                  tags: |
-                      ghcr.io/${{ github.repository_owner }}/codescan:${{ steps.version.outputs.full }}
-                      ghcr.io/${{ github.repository_owner }}/codescan:${{ steps.version.outputs.major }}
-                  cache-from: type=gha
-                  cache-to: type=gha,mode=max
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-            - name: Summary
-              run: |
-                  echo "Published:" >> "$GITHUB_STEP_SUMMARY"
-                  echo "- \`ghcr.io/${{ github.repository_owner }}/codescan:${{ steps.version.outputs.full }}\`" >> "$GITHUB_STEP_SUMMARY"
-                  echo "- \`ghcr.io/${{ github.repository_owner }}/codescan:${{ steps.version.outputs.major }}\` (moving tag, now points here)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # multi-arch build so the image works on both Intel and ARM
+          # GitHub-hosted/self-hosted runners without a separate manifest
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ghcr.io/${{ steps.version.outputs.owner }}/codescan:${{ steps.version.outputs.full }}
+            ghcr.io/${{ steps.version.outputs.owner }}/codescan:${{ steps.version.outputs.major }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          echo "Published:" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`ghcr.io/${{ steps.version.outputs.owner }}/codescan:${{ steps.version.outputs.full }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`ghcr.io/${{ steps.version.outputs.owner }}/codescan:${{ steps.version.outputs.major }}\` (moving tag, now points here)" >> "$GITHUB_STEP_SUMMARY"

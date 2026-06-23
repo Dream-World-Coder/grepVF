@@ -188,7 +188,7 @@ def _value_is_placeholder(value: str) -> bool:
     (XXXX..., 0000...) or literally the word "example"/"changeme".
     """
     lowered = value.lower()
-    if lowered in ("changeme", "placeholder", "your_secret_here"):
+    if lowered in ("changeme", "placeholder") or "your_secret" in lowered:
         return True
     if len(set(value)) <= 2 and len(value) >= 8:
         return True  # e.g. "XXXXXXXXXXXX" or "00000000000"
@@ -230,8 +230,17 @@ def scan_file_for_secrets(file_path: str, content: str) -> list[Finding]:
             # the full match if the pattern has no groups) so an incidental
             # word like "example" elsewhere on the line doesn't suppress a
             # genuine adjacent secret.
-            captured_value = m.group(1) if m.groups() else m.group(0)
+            captured_value = m.group(m.lastindex) if m.lastindex else m.group(0)
             if _value_is_placeholder(captured_value):
+                continue
+
+            # Prevent double-reporting the same secret via multiple regexes
+            is_overlap = False
+            for start, end in matched_spans_by_line.get(line_no, []):
+                if max(m.start(), start) < min(m.end(), end):
+                    is_overlap = True
+                    break
+            if is_overlap:
                 continue
 
             findings.append(

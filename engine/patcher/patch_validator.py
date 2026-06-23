@@ -83,14 +83,21 @@ def _revalidate_against_semgrep_rule(
             ],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=SEMGREP_REVALIDATION_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:
         return ValidationResult(passed=False, reason="semgrep revalidation timed out")
+    except FileNotFoundError:
+        return ValidationResult(
+            passed=False, reason="semgrep executable not found on PATH"
+        )
     finally:
         Path(tmp_path).unlink(missing_ok=True)
 
-    if not proc.stdout.strip():
+    stdout = proc.stdout or ""
+    if not stdout.strip():
         # No output at all is suspicious (semgrep usually emits a JSON
         # skeleton even with zero findings) — treat as a failed validation
         # rather than silently assuming success.
@@ -101,7 +108,7 @@ def _revalidate_against_semgrep_rule(
     import json
 
     try:
-        data = json.loads(proc.stdout)
+        data = json.loads(stdout)
     except json.JSONDecodeError:
         return ValidationResult(
             passed=False, reason="could not parse semgrep revalidation output"

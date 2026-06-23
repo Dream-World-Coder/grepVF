@@ -101,6 +101,8 @@ def _run_semgrep(
             cwd=repo_root,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=SEMGREP_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:
@@ -111,14 +113,15 @@ def _run_semgrep(
             "errors": [{"message": "semgrep executable not found on PATH"}],
         }
 
-    if not proc.stdout.strip():
+    stdout = proc.stdout or ""
+    if not stdout.strip():
         return {
             "results": [],
             "errors": [{"message": proc.stderr or "semgrep produced no output"}],
         }
 
     try:
-        return json.loads(proc.stdout)
+        return json.loads(stdout)
     except json.JSONDecodeError as exc:
         return {
             "results": [],

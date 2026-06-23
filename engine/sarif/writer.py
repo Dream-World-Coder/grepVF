@@ -30,8 +30,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from aggregator.report_aggregator import AggregatedReport
-from scanner.models import Finding
+from engine.models import Finding
+from engine.reports.final import AggregatedReport
 
 SARIF_SCHEMA_URL = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
 SARIF_VERSION = "2.1.0"
