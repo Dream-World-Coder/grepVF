@@ -179,6 +179,18 @@ def validate_patch(
             else "USER directive still missing",
         )
 
+    if finding.source_engine == "cve_checker.osv":
+        fixed_version = finding.extra.get("fixed_version") if finding.extra else None
+        if fixed_version and fixed_version in patched_content:
+            return ValidationResult(
+                passed=True, 
+                reason=f"bumped version to {fixed_version}"
+            )
+        return ValidationResult(
+            passed=False, 
+            reason="patched content does not contain the fixed version"
+        )
+
     return ValidationResult(
         passed=False,
         reason=f"no validation strategy for source_engine={finding.source_engine}",

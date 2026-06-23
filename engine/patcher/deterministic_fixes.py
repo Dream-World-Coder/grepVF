@@ -241,6 +241,30 @@ def _fix_dockerfile_secret_env(
     return None
 
 
+def _fix_cve_dependency(line: str, finding: Finding) -> Optional[DeterministicFixResult]:
+    fixed_version = finding.extra.get("fixed_version")
+    if not fixed_version:
+        return None
+
+    installed_version = finding.extra.get("installed_version")
+    package = finding.extra.get("package")
+
+    # cve_checker always sets line=1 as a placeholder for all dependency
+    # findings — the actual package line can be anywhere in the manifest.
+    # Use `finding.matched_code` (e.g. "Django==2.1.5") as the authoritative
+    # source of the line to rewrite, instead of the physical source line.
+    canonical_line = finding.matched_code or line
+
+    if installed_version and installed_version in canonical_line:
+        fixed = canonical_line.replace(installed_version, fixed_version)
+        return DeterministicFixResult(
+            fixed_line=fixed,
+            explanation=f"Bumped {package} from {installed_version} to {fixed_version} to fix {finding.rule_id}.",
+        )
+    return None
+
+
+
 # Dispatch table: rule_id -> fix function. Rule IDs not present here always
 # fall through to the LLM patcher (or manual review if LLM is unavailable).
 DETERMINISTIC_FIX_TABLE: dict[str, FixFunction] = {
@@ -266,7 +290,10 @@ def try_deterministic_fix(
     rule" and "fix function declined to handle this specific occurrence" —
     callers should treat both identically: fall through to the LLM path.
     """
-    fix_fn = DETERMINISTIC_FIX_TABLE.get(finding.rule_id)
+    if finding.rule_id.startswith("cve-"):
+        fix_fn = _fix_cve_dependency
+    else:
+        fix_fn = DETERMINISTIC_FIX_TABLE.get(finding.rule_id)
     if fix_fn is None:
         return None
     try:
