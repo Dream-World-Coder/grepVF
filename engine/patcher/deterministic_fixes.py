@@ -248,11 +248,6 @@ def _fix_cve_dependency(line: str, finding: Finding) -> Optional[DeterministicFi
 
     installed_version = finding.extra.get("installed_version")
     package = finding.extra.get("package")
-
-    # cve_checker always sets line=1 as a placeholder for all dependency
-    # findings — the actual package line can be anywhere in the manifest.
-    # Use `finding.matched_code` (e.g. "Django==2.1.5") as the authoritative
-    # source of the line to rewrite, instead of the physical source line.
     canonical_line = finding.matched_code or line
 
     if installed_version and installed_version in canonical_line:
@@ -262,8 +257,6 @@ def _fix_cve_dependency(line: str, finding: Finding) -> Optional[DeterministicFi
             explanation=f"Bumped {package} from {installed_version} to {fixed_version} to fix {finding.rule_id}.",
         )
     return None
-
-
 
 # Dispatch table: rule_id -> fix function. Rule IDs not present here always
 # fall through to the LLM patcher (or manual review if LLM is unavailable).
