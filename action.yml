@@ -1,0 +1,19 @@
+name: 'GrepVF CodeScan'
+description: 'Fast, asynchronous SAST and secret-scanning pipeline with ZoneScan.'
+inputs:
+  args:
+    description: 'Arguments to pass to the engine (e.g. --zone-detect, --patch)'
+    required: false
+    default: ''
+runs:
+  using: 'composite'
+  steps:
+    - name: Run GrepVF Engine
+      shell: bash
+      run: |
+        # Use the v1 tag from ghcr.io, mounting the GitHub workspace
+        # We assume the user has configured permissions properly.
+        docker run --rm \
+          -v ${{ github.workspace }}:/workspace \
+          ghcr.io/${{ github.repository_owner }}/codescan:v1 \
+          /workspace ${{ inputs.args }}

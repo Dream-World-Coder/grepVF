@@ -25,6 +25,13 @@ WORKDIR /app
 COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+# ZoneScan optional ML dependencies
+ARG ZONESCAN_VARIANT=base
+COPY requirements-training.txt requirements-training.txt
+RUN if [ "$ZONESCAN_VARIANT" = "zonescan" ]; then \
+        pip install --no-cache-dir -r requirements-training.txt; \
+    fi
+
 # Copy the actual engine package and CLI entrypoint.
 COPY engine/ ./engine/
 COPY main.py ./main.py
