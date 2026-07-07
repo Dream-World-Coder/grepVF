@@ -1,5 +1,5 @@
 """
-main.py — GrepVF CLI entry point.
+main.py —:- GrepVF CLI entry point.
 
 Usage
 -----
@@ -122,6 +122,22 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         help="Suppress all informational output; only errors and the final JSON report are printed.",
     )
+    p.add_argument(
+        "--zone-detect",
+        action="store_true",
+        default=False,
+        help="Enable ZoneScan: a retrieval+verification layer that flags code semantically similar "
+        "to known-vulnerable CWE patterns, then uses scoped Semgrep taint analysis to confirm. "
+        "Requires 'transformers' and 'torch' to be installed. Off by default until M2 artifacts "
+        "are available — use the built-in M1 zero-shot centroid for initial testing.",
+    )
+    p.add_argument(
+        "--zone-index",
+        metavar="PATH",
+        default=None,
+        help="Path to a pre-built CWE index directory (centroids.json + cwe_index.faiss). "
+        "Only used when --zone-detect is set. Omit to use the built-in M1 zero-shot centroid.",
+    )
     return p
 
 
@@ -167,7 +183,10 @@ def main(argv: list[str] | None = None) -> int:
 
     repo_arg = args.repo_flag or args.repo_positional
     if not repo_arg:
-        print("[ERROR] No repository path given. Pass it positionally or via --repo.", file=sys.stderr)
+        print(
+            "[ERROR] No repository path given. Pass it positionally or via --repo.",
+            file=sys.stderr,
+        )
         return 2
 
     repo_path = _validate_repo_path(repo_arg)
@@ -196,7 +215,9 @@ def main(argv: list[str] | None = None) -> int:
             "total_routed": files.total_routed,
         }
         if args.output:
-            Path(args.output).write_text(json.dumps(summary, indent=2), encoding="utf-8")
+            Path(args.output).write_text(
+                json.dumps(summary, indent=2), encoding="utf-8"
+            )
             print(f"[GrepVF] Route map written to {args.output}")
         else:
             print(json.dumps(summary, indent=2))
@@ -204,7 +225,11 @@ def main(argv: list[str] | None = None) -> int:
 
     # ── full scan
     try:
-        report = engine.run_scan(patch=args.patch)
+        report = engine.run_scan(
+            patch=args.patch,
+            zone_detect=args.zone_detect,
+            zone_index_path=args.zone_index,
+        )
     except Exception as exc:
         # Surface unexpected scan errors without a traceback wall. In
         # container mode this is intentionally non-fatal to the exit code
@@ -224,7 +249,14 @@ def main(argv: list[str] | None = None) -> int:
         _print_findings_table(report)
         report_dict = report.to_dict()
     else:
-        report_dict = {"summary": {"total_findings": 0, "duplicates_removed": 0, "by_severity": {}}, "findings": []}
+        report_dict = {
+            "summary": {
+                "total_findings": 0,
+                "duplicates_removed": 0,
+                "by_severity": {},
+            },
+            "findings": [],
+        }
 
     if args.output:
         out_path = Path(args.output)
@@ -251,7 +283,9 @@ def main(argv: list[str] | None = None) -> int:
             # missing file.
             from engine.reports.final import aggregate
 
-            write_sarif_file(aggregate([[], [], []]), str(sarif_path), repo_uri=args.repo_uri)
+            write_sarif_file(
+                aggregate([[], [], []]), str(sarif_path), repo_uri=args.repo_uri
+            )
         print(f"[GrepVF] report.sarif written to {sarif_path}")
 
         # Container always exits 0 here — see module docstring. The PR

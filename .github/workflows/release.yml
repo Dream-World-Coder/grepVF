@@ -10,6 +10,19 @@
 # This workflow does NOT run on every push to main — only on tags — so
 # in-progress work on main never accidentally publishes a half-finished
 # image that consumer repos would pull on their next PR scan.
+#
+# ZoneScan notes
+# --------------
+# The base image includes numpy (required for centroid similarity math) but
+# NOT torch or transformers — those add ~800 MB and are only needed for the
+# real embedding model (M2+). The test suite runs ZoneScan with the
+# deterministic hash-based stub embedder, so no GPU or ML deps are needed
+# in this CI job.
+#
+# For M2+ a separate `:zonescan` image tag (with torch + transformers) will
+# be built by a future workflow variant. That image will be gated behind the
+# same test suite plus an additional `--zone-detect` integration smoke test
+# against tests/repo/payment_service.py.
 
 name: Build and publish engine image
 
@@ -33,11 +46,20 @@ jobs:
           python3 -m venv venv
           . venv/bin/activate
           pip install -r requirements.txt
+          # numpy is now a base runtime dep (zonescan centroid similarity).
+          # requirements.txt already pins it — this pip install is a no-op
+          # if requirements.txt was fully installed above, but made explicit
+          # here as documentation of the dependency boundary.
+          pip install numpy
           pytest tests/ -v
         # Deliberately a hard gate: a tag that doesn't pass the test suite
         # never reaches GHCR. This is the same role the deck's "CI gate
         # blocks merge on unresolved CRITICAL" plays for consumer repos —
         # here it's the engine repo refusing to publish a broken image.
+        #
+        # ZoneScan tests run with the stub embedder (no torch/transformers
+        # needed) and cover: chunker, embedder stub, CWE index, zone_detector
+        # end-to-end, hazard score, and dedup correctness.
 
       - name: Extract version from tag
         id: version
@@ -63,7 +85,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push image
+      - name: Build and push image (base — no ML deps)
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -74,11 +96,22 @@ jobs:
           tags: |
             ghcr.io/${{ steps.version.outputs.owner }}/codescan:${{ steps.version.outputs.full }}
             ghcr.io/${{ steps.version.outputs.owner }}/codescan:${{ steps.version.outputs.major }}
+          # ZONESCAN_VARIANT=base — includes numpy but NOT torch/transformers.
+          # ZoneScan runs with the stub embedder at the real similarity threshold
+          # (no candidates will pass unless the real model is mounted at runtime).
+          # Pass --zone-detect to enable; the scanner degrades gracefully.
+          build-args: |
+            ZONESCAN_VARIANT=base
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Summary
         run: |
-          echo "Published:" >> "$GITHUB_STEP_SUMMARY"
-          echo "- \`ghcr.io/${{ steps.version.outputs.owner }}/codescan:${{ steps.version.outputs.full }}\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- \`ghcr.io/${{ steps.version.outputs.owner }}/codescan:${{ steps.version.outputs.major }}\` (moving tag, now points here)" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Published engine image" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Tag | Purpose |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`ghcr.io/${{ steps.version.outputs.owner }}/codescan:${{ steps.version.outputs.full }}\` | Exact release tag |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`ghcr.io/${{ steps.version.outputs.owner }}/codescan:${{ steps.version.outputs.major }}\` | Moving major tag (now points here) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**ZoneScan:** included with stub embedder (base image). Use \`--zone-detect\` flag to enable. Real embedding model (M2+) requires the \`:zonescan\` image variant." >> "$GITHUB_STEP_SUMMARY"

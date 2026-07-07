@@ -23,3 +23,13 @@ htmlcov/
 # Third-party schema files (local IDE validation only — not used at runtime)
 # The actual schema URL is embedded as a string in engine/sarif/writer.py
 sarif-schema-2.1.0.json
+
+# Scan outputs — not tracked; use --output flag to save reports explicitly
+outputs/*
+!outputs/.gitkeep
+
+# ZoneScan model artifacts — large binary files; pull at build time
+artifacts/zonescan_lora/
+artifacts/*.faiss
+
+tests/repo/*

@@ -21,6 +21,7 @@ from engine.filescan import RoutedFiles, scan_files
 from engine.models import Finding, FixType, ScanResult
 from engine.patcher import PatchOutcome, generate_patches_for_findings_async
 from engine.reports import AggregatedReport, aggregate
+from engine.zonescan import run_zone_detector
 
 # ---------------------------------------------------------------------------
 # Module-level helpers  (not part of GrepVF's public surface)
@@ -58,12 +59,19 @@ def _print_scanner_summary(
     cve: ScanResult,
     semantics: ScanResult,
     elapsed: float,
+    zone: ScanResult | None = None,
 ) -> None:
     for name, result in (("entropy", entropy), ("cve", cve), ("semantics", semantics)):
         print(
             f"  {name:<12} "
             + f"\n{len(result.findings):>3} finding(s)  "
             + f"\n{result.files_scanned} file(s) scanned"
+        )
+    if zone is not None:
+        print(
+            f"  {'zonescan':<12} "
+            + f"\n{len(zone.findings):>3} finding(s)  "
+            + f"\n{zone.files_scanned} file(s) scanned"
         )
     print(f"  ({_fmt(elapsed)})")
 
@@ -159,7 +167,12 @@ class GrepVF:
         _print_routing_summary(self.files)
         return self.files
 
-    async def run_scan_async(self, patch: bool = False) -> AggregatedReport:
+    async def run_scan_async(
+        self,
+        patch: bool = False,
+        zone_detect: bool = False,
+        zone_index_path: str | None = None,
+    ) -> AggregatedReport:
         """
         Full pipeline, async variant.
 
@@ -169,6 +182,14 @@ class GrepVF:
             When True, runs patch generation after aggregation and writes
             fix_type / suggested_fix / fix_validated back onto each Finding
             in the returned report.
+        zone_detect : bool
+            When True, enables the ZoneScan retrieval+verification layer as a
+            4th concurrent scanner. Requires the embedding model to be
+            available (transformers + torch). Default off — use `--zone-detect`
+            to enable.
+        zone_index_path : str | None
+            Path to a pre-built CWE index directory (M2+ artifacts). When None,
+            uses the built-in M1 zero-shot centroid.
 
         Returns
         -------
@@ -190,7 +211,7 @@ class GrepVF:
 
         if self.files.total_routed == 0:
             print("[GrepVF] No scannable files found — nothing to report.")
-            self.report = aggregate([[], [], []])
+            self.report = aggregate([[], [], [], []])
             return self.report
 
         # ------------------------------------------------------------------
@@ -207,11 +228,13 @@ class GrepVF:
         )
 
         # ------------------------------------------------------------------
-        # Stage 3: three scanners, concurrent
+        # Stage 3: three (or four) scanners, concurrent
         #
         # entropy_checker and semantics_checker are synchronous; dispatched
         # to a thread pool so they don't block the event loop during the
         # CVE checker's HTTP calls.
+        # zone_detector is also synchronous (CPU-bound: embedding inference
+        # + a Semgrep subprocess); dispatched the same way.
         # ------------------------------------------------------------------
         print("[GrepVF] Running scanners...")
         t0 = time.perf_counter()
@@ -223,23 +246,53 @@ class GrepVF:
             None, run_semantics_checker, root, self.files.code
         )
 
-        entropy_result, semantics_result, cve_result = await asyncio.gather(
-            entropy_task,
-            semantics_task,
-            check_dependencies_async(dependencies),
-        )
+        if zone_detect:
+            zone_task = loop.run_in_executor(
+                None,
+                run_zone_detector,
+                root,
+                self.files.code,
+                zone_index_path,
+            )
+            (
+                entropy_result,
+                semantics_result,
+                cve_result,
+                zone_result,
+            ) = await asyncio.gather(
+                entropy_task,
+                semantics_task,
+                check_dependencies_async(dependencies),
+                zone_task,
+            )
+        else:
+            entropy_result, semantics_result, cve_result = await asyncio.gather(
+                entropy_task,
+                semantics_task,
+                check_dependencies_async(dependencies),
+            )
+            zone_result = ScanResult(
+                findings=[], engine="zonescan", files_scanned=0
+            )
 
         self.scan_results = {
             "entropy": entropy_result,
             "cve": cve_result,
             "semantics": semantics_result,
+            "zonescan": zone_result,
         }
 
         _print_scanner_errors("entropy", entropy_result)
         _print_scanner_errors("cve", cve_result)
         _print_scanner_errors("semantics", semantics_result)
+        if zone_detect:
+            _print_scanner_errors("zonescan", zone_result)
         _print_scanner_summary(
-            entropy_result, cve_result, semantics_result, time.perf_counter() - t0
+            entropy_result,
+            cve_result,
+            semantics_result,
+            time.perf_counter() - t0,
+            zone=zone_result if zone_detect else None,
         )
 
         # ------------------------------------------------------------------
@@ -250,6 +303,7 @@ class GrepVF:
                 entropy_result.findings,
                 cve_result.findings,
                 semantics_result.findings,
+                zone_result.findings,
             ]
         )
 
@@ -276,9 +330,20 @@ class GrepVF:
         print(f"[GrepVF] Done — {_fmt(time.perf_counter() - t_total)} total")
         return self.report
 
-    def run_scan(self, patch: bool = False) -> AggregatedReport:
+    def run_scan(
+        self,
+        patch: bool = False,
+        zone_detect: bool = False,
+        zone_index_path: str | None = None,
+    ) -> AggregatedReport:
         """Synchronous wrapper around run_scan_async for CLI / test callers."""
-        return asyncio.run(self.run_scan_async(patch=patch))
+        return asyncio.run(
+            self.run_scan_async(
+                patch=patch,
+                zone_detect=zone_detect,
+                zone_index_path=zone_index_path,
+            )
+        )
 
     def has_blocking_criticals(self) -> bool:
         """

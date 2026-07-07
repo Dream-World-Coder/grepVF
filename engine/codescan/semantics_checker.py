@@ -53,21 +53,40 @@ def _severity_override_from_metadata(metadata: dict, fallback: Severity) -> Seve
     return Severity.LOW
 
 
-def _run_semgrep(
-    target_paths: list[str], repo_root: str, extra_config: list[str] | None = None
+def run_semgrep_scoped(
+    target_paths: list[str],
+    repo_root: str,
+    rule_files: list[str] | None = None,
 ) -> dict:
     """
-    Invokes the semgrep CLI as a subprocess. Using the CLI rather than
-    semgrep's internal Python API is intentional: the CLI's --json output
-    is a stable, documented contract, whereas semgrep's internal Python
-    modules are not a supported public API and change between versions.
+    Invokes the semgrep CLI as a subprocess with an explicit list of rule
+    files (or the full RULES_DIR when none are specified).
+
+    This is the canonical subprocess invocation used by both:
+      - `run_semantics_checker` (full ruleset, all code files)
+      - `taint_verifier.verify` (single rule file, single candidate file)
+
+    Using the CLI rather than semgrep's internal Python API is intentional:
+    the CLI's --json output is a stable, documented contract, whereas
+    semgrep's internal Python modules are not a supported public API and
+    change between versions.
 
     --quiet suppresses the human-readable status panel that would otherwise
     interleave with --json output on stdout (discovered the hard way —
     without it, `json.loads()` on stdout fails).
+
+    Parameters
+    ----------
+    target_paths : list[str]
+        File paths to scan (absolute or repo-relative).
+    repo_root : str
+        Working directory for the semgrep subprocess.
+    rule_files : list[str] | None
+        Explicit list of rule file paths. When None, defaults to the full
+        RULES_DIR (same behaviour as before the refactor).
     """
     config_args = []
-    for cfg in extra_config or [str(RULES_DIR)]:
+    for cfg in rule_files or [str(RULES_DIR)]:
         config_args += ["--config", cfg]
 
     cmd = [
@@ -114,6 +133,10 @@ def _run_semgrep(
             "results": [],
             "errors": [{"message": f"failed to parse semgrep output: {exc}"}],
         }
+
+
+# Keep a private alias so callers within this module use the same function.
+_run_semgrep = run_semgrep_scoped
 
 
 def _finding_from_semgrep_result(result: dict, repo_root: str) -> Finding:
@@ -233,7 +256,7 @@ def run_semantics_checker(repo_root: str, code_paths: list[str]) -> ScanResult:
     errors: list[str] = []
     findings: list[Finding] = []
 
-    raw = _run_semgrep(code_paths, repo_root)
+    raw = run_semgrep_scoped(code_paths, repo_root)
     for err in raw.get("errors", []):
         msg = (
             err.get("message")

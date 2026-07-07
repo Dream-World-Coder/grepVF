@@ -74,7 +74,7 @@ class Finding:
     matched_code: Optional[str] = None  # the offending snippet
     column: int = 1
     end_column: int = 1
-    source_engine: str = "unknown"  # "entropy" | "cve" | "semgrep"
+    source_engine: str = "unknown"  # "entropy" | "cve" | "semgrep" | "zonescan"
     extra: dict = field(default_factory=dict)  # engine-specific payload
     hazard_score: Optional[float] = None  # filled in by aggregator
     fix_type: FixType = FixType.NONE

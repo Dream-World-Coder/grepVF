@@ -1,0 +1,21 @@
+# ZoneScan training dependencies — offline only, NOT in the Docker runtime image.
+#
+# Used by:
+#   engine/training/build_dataset.py     (M2)
+#   engine/training/mine_pairs.py        (M2)
+#   engine/training/finetune_embedder.py (M2)
+#   engine/training/build_centroids.py   (M2)
+#   engine/training/eval_temporal_holdout.py (M3)
+#
+# Install: pip install -r requirements-training.txt
+# (Requires the base requirements.txt to be installed first)
+
+datasets>=2.19.0        # HuggingFace datasets for VulGate
+peft>=0.11.0            # LoRA adapters via PEFT
+accelerate>=0.30.0      # HuggingFace Accelerate for training loops
+faiss-cpu>=1.8.0        # FAISS index building (use faiss-gpu on GPU machines)
+
+# The torch and transformers versions here are the minimum for LoRA fine-tuning.
+# Pin exact versions in your training environment for reproducibility.
+torch>=2.2.0
+transformers>=4.40.0

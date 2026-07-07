@@ -32,6 +32,9 @@ _INTERNET_FACING_HINTS = (
 # stronger exploitability signal than "this pattern shape appeared."
 _TAINT_CONFIRMED_RULES = {
     "sql-injection-string-concat",
+    # zonescan verified findings: semantic-similarity match + independent scoped
+    # taint confirmation agreeing is a stronger signal than either alone.
+    "zonescan/cwe-89-verified",
 }
 
 
@@ -91,6 +94,20 @@ def get_hazard_score(finding: Finding) -> float:
     # act on than ones with no fix yet, since "just bump the version" is a
     # low-effort remediation that should be prioritized while it's cheap.
     if finding.category == Category.CVE and finding.extra.get("fixed_version"):
+        score += 0.5
+
+    # Corroboration bump: ZoneScan verified findings have two independent
+    # signals in agreement — a semantic-similarity retrieval hit AND an
+    # independent scoped Semgrep taint confirmation. This is a stronger
+    # exploitability signal than either alone, and is the core story for
+    # why ZoneScan beats running the three original tools separately.
+    # The +0.5 stacks with the +1.0 from _TAINT_CONFIRMED_RULES above,
+    # so a verified zone finding at HIGH base: 7.0 + 1.0 + 0.5 = 8.5
+    # (noticeably above a bare Semgrep HIGH, below CRITICAL).
+    if (
+        finding.source_engine == "zonescan"
+        and finding.extra.get("verified") is True
+    ):
         score += 0.5
 
     return min(score, 10.0)
