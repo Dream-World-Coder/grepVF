@@ -31,5 +31,3 @@ outputs/*
 # ZoneScan model artifacts — large binary files; pull at build time
 artifacts/zonescan_lora/
 artifacts/*.faiss
-
-tests/repo/*
