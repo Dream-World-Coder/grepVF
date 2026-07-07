@@ -63,13 +63,16 @@ runs:
         # Given the Docker container permission to write the findings.json report here
         chmod 777 "${{ github.workspace }}/.codescan"
         
+        # Note: github.repository_owner is the consumer's repo owner. We need to 
+        # point directly to where the action is hosted (dream-world-coder/grepvf)
+        # since that's where the image lives. GHCR requires strictly lowercase.
         docker run --rm \
           -e LLM_API_KEY="${{ inputs.llm-api-key }}" \
           -e LLM_API_URL="${{ inputs.llm-api-url }}" \
           -e LLM_MODEL="${{ inputs.llm-model }}" \
           -e LLM_TRIAGE_MODEL="${{ inputs.llm-triage-model }}" \
           -v "${{ github.workspace }}:/workspace" \
-          ghcr.io/${{ github.repository_owner }}/codescan:${{ inputs.image-tag }} \
+          ghcr.io/dream-world-coder/grepvf:${{ inputs.image-tag }} \
           --repo /workspace \
           --out /workspace/.codescan \
           --repo-uri "https://github.com/${{ github.repository }}" \

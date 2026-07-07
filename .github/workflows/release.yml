@@ -94,8 +94,8 @@ jobs:
           # GitHub-hosted/self-hosted runners without a separate manifest
           platforms: linux/amd64,linux/arm64
           tags: |
-            ghcr.io/${{ steps.version.outputs.owner }}/codescan:${{ steps.version.outputs.full }}
-            ghcr.io/${{ steps.version.outputs.owner }}/codescan:${{ steps.version.outputs.major }}
+            ghcr.io/${{ steps.version.outputs.owner }}/grepvf:${{ steps.version.outputs.full }}
+            ghcr.io/${{ steps.version.outputs.owner }}/grepvf:${{ steps.version.outputs.major }}
           # ZONESCAN_VARIANT=base — includes numpy but NOT torch/transformers.
           # ZoneScan runs with the stub embedder at the real similarity threshold
           # (no candidates will pass unless the real model is mounted at runtime).
@@ -111,7 +111,7 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Tag | Purpose |" >> "$GITHUB_STEP_SUMMARY"
           echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| \`ghcr.io/${{ steps.version.outputs.owner }}/codescan:${{ steps.version.outputs.full }}\` | Exact release tag |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| \`ghcr.io/${{ steps.version.outputs.owner }}/codescan:${{ steps.version.outputs.major }}\` | Moving major tag (now points here) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`ghcr.io/${{ steps.version.outputs.owner }}/grepvf:${{ steps.version.outputs.full }}\` | Exact release tag |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`ghcr.io/${{ steps.version.outputs.owner }}/grepvf:${{ steps.version.outputs.major }}\` | Moving major tag (now points here) |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "**ZoneScan:** included with stub embedder (base image). Use \`--zone-detect\` flag to enable. Real embedding model (M2+) requires the \`:zonescan\` image variant." >> "$GITHUB_STEP_SUMMARY"
