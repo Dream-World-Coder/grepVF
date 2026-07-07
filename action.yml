@@ -76,7 +76,6 @@ runs:
           --repo /workspace \
           --out /workspace/.codescan \
           --repo-uri "https://github.com/${{ github.repository }}" \
-          --triage \
           --patch \
           ${{ inputs.args }}
 
