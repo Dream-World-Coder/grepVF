@@ -1,9 +1,9 @@
-# CodeScan engine image — published to ghcr.io/yourorg/codescan
+# CodeScan engine image — published to ghcr.io/yourorg/grepvf
 #
 # This image is intentionally platform-agnostic: it only reads source code
 # from /workspace and writes SARIF/JSON to an output directory. It knows
 # nothing about GitHub, PRs, or Actions — that's the composite action's
-# job (see codescan-action/action.yml, a separate repo when published).
+# job (see action.yml in this repo).
 # This separation is what lets the exact same image back a future
 # GitLab/Bitbucket adapter without any changes here.
 
