@@ -1,19 +1,291 @@
-name: 'GrepVF CodeScan'
-description: 'Fast, asynchronous SAST and secret-scanning pipeline with ZoneScan.'
+name: "CodeScan Security Gate"
+description: "Scans PRs for vulnerabilities and posts fix suggestions, gated on .codescan.yml thresholds."
+author: "System Callers"
+branding:
+  icon: "shield"
+  color: "blue"
+
 inputs:
-  args:
-    description: 'Arguments to pass to the engine (e.g. --zone-detect, --patch)'
+  github-token:
+    description: "Token used to post PR comments and upload SARIF. Defaults to the workflow's own token."
+    required: true
+    default: ${{ github.token }}
+  fail-on:
+    description: "Severity that blocks the check: critical | high | medium | none. Overridden by .codescan.yml if present."
     required: false
-    default: ''
+    default: "critical"
+  config-path:
+    description: "Path (relative to the consumer repo root) to the .codescan.yml config file."
+    required: false
+    default: ".codescan.yml"
+  image-tag:
+    description: "Override the engine image tag (advanced — most consumers should leave this at v1)."
+    required: false
+    default: "v1"
+  llm-api-key:
+    description: "API Key for the LLM Triage and Patcher engines."
+    required: true
+  llm-api-url:
+    description: "API URL for the LLM (e.g. https://api.groq.com/openai/v1/chat/completions)."
+    required: false
+    default: "https://api.groq.com/openai/v1/chat/completions"
+  llm-model:
+    description: "The name of the LLM model to use for patching (e.g. llama-3.1-8b-instant)."
+    required: false
+    default: "llama-3.1-8b-instant"
+  llm-triage-model:
+    description: "The name of the LLM model to use for triage (if different from llm-model)."
+    required: false
+    default: "llama-3.1-8b-instant"
+  args:
+    description: "Extra arguments to pass to the engine (e.g., --zone-detect)"
+    required: false
+    default: "--zone-detect"
+
+outputs:
+  findings-count:
+    description: "Total number of findings after deduplication."
+    value: ${{ steps.gate.outputs.findings-count }}
+  critical-count:
+    description: "Number of unresolved CRITICAL-severity findings."
+    value: ${{ steps.gate.outputs.critical-count }}
+  sarif-path:
+    description: "Path to the generated SARIF report, relative to the workspace."
+    value: ".codescan/report.sarif"
+
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
-    - name: Run GrepVF Engine
+    - name: Run CodeScan engine
       shell: bash
       run: |
-        # Use the v1 tag from ghcr.io, mounting the GitHub workspace
-        # We assume the user has configured permissions properly.
+        mkdir -p "${{ github.workspace }}/.codescan"
+        # Given the Docker container permission to write the findings.json report here
+        chmod 777 "${{ github.workspace }}/.codescan"
+        
         docker run --rm \
-          -v ${{ github.workspace }}:/workspace \
-          ghcr.io/${{ github.repository_owner }}/codescan:v1 \
-          /workspace ${{ inputs.args }}
+          -e LLM_API_KEY="${{ inputs.llm-api-key }}" \
+          -e LLM_API_URL="${{ inputs.llm-api-url }}" \
+          -e LLM_MODEL="${{ inputs.llm-model }}" \
+          -e LLM_TRIAGE_MODEL="${{ inputs.llm-triage-model }}" \
+          -v "${{ github.workspace }}:/workspace" \
+          ghcr.io/${{ github.repository_owner }}/codescan:${{ inputs.image-tag }} \
+          --repo /workspace \
+          --out /workspace/.codescan \
+          --repo-uri "https://github.com/${{ github.repository }}" \
+          --triage \
+          --patch \
+          ${{ inputs.args }}
+
+    - name: Upload SARIF to Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ github.workspace }}/.codescan/report.sarif
+
+    - name: Apply .codescan.yml overrides and evaluate gate
+      id: gate
+      shell: bash
+      env:
+        FAIL_ON_INPUT: ${{ inputs.fail-on }}
+        CONFIG_PATH: ${{ inputs.config-path }}
+      run: |
+        # Fallback inline evaluation in case scripts/evaluate_gate.py is missing
+        if [ -f "${{ github.action_path }}/scripts/evaluate_gate.py" ]; then
+          if [ -f "${{ github.action_path }}/requirements.txt" ]; then
+            pip install --quiet -r "${{ github.action_path }}/requirements.txt"
+          fi
+          python3 "${{ github.action_path }}/scripts/evaluate_gate.py" \
+            --findings "${{ github.workspace }}/.codescan/findings.json" \
+            --config "${{ github.workspace }}/${CONFIG_PATH}" \
+            --default-fail-on "${FAIL_ON_INPUT}"
+        else
+          echo "Warning: scripts/evaluate_gate.py not found. Using simple fallback evaluation."
+          CRIT_COUNT=$(grep -o '"severity": "CRITICAL"' "${{ github.workspace }}/.codescan/findings.json" | wc -l || echo 0)
+          echo "critical-count=$CRIT_COUNT" >> $GITHUB_OUTPUT
+          if [ "$CRIT_COUNT" -gt 0 ] && [ "$FAIL_ON_INPUT" = "critical" ]; then
+            echo "should-fail=true" >> $GITHUB_OUTPUT
+          fi
+        fi
+
+    - name: Post inline fix suggestions and PR summary
+      if: ${{ github.event_name == 'pull_request' }}
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const fs = require('fs');
+          const reportPath = `${{ github.workspace }}/.codescan/findings.json`;
+          if (!fs.existsSync(reportPath)) {
+            console.log("No findings.json found.");
+            return;
+          }
+          const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+          const findings = report.findings || [];
+          const s = report.summary || { by_severity: {}, total_findings: findings.length, duplicates_removed: 0 };
+
+          const severityEmoji = { CRITICAL: '🔴', HIGH: '🟠', MEDIUM: '🟡', LOW: '🔵' };
+
+          // ── 1. Get the PR HEAD commit SHA (required by createReviewComment) ──
+          const { data: pr } = await github.rest.pulls.get({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.issue.number,
+          });
+          const commitId = pr.head.sha;
+
+          // ── 2. Build a map of which line numbers are in the PR diff ──
+          function parseDiffLines(patch) {
+            const lines = new Set();
+            if (!patch) return lines;
+            let newLine = 0;
+            for (const raw of patch.split('\n')) {
+              const hunk = raw.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+              if (hunk) { newLine = parseInt(hunk[1], 10); continue; }
+              if (raw.startsWith('\\')) continue;
+              if (raw.startsWith('+')) { lines.add(newLine); newLine++; }
+              else if (raw.startsWith('-')) { }
+              else { lines.add(newLine); newLine++; }
+            }
+            return lines;
+          }
+
+          const changedFiles = await github.paginate(
+            github.rest.pulls.listFiles,
+            { owner: context.repo.owner, repo: context.repo.repo, pull_number: context.issue.number }
+          );
+          const diffLineMap = {};
+          for (const f of changedFiles) {
+            diffLineMap[f.filename] = parseDiffLines(f.patch);
+          }
+
+          // ── 3. Collect existing review comments to prevent re-posting ──
+          const existingReviewComments = await github.paginate(
+            github.rest.pulls.listReviewComments,
+            { owner: context.repo.owner, repo: context.repo.repo, pull_number: context.issue.number }
+          );
+          const commentedKeys = new Set(
+            existingReviewComments
+              .filter(c => c.body.includes('<!-- codescan-key:'))
+              .map(c => { const m = c.body.match(/<!-- codescan-key:([^>]+) -->/); return m ? m[1] : null; })
+              .filter(Boolean)
+          );
+
+          // ── 4. Post one inline suggestion comment per fixable finding ──
+          let inlinePosted = 0;
+          let inlineSkipped = 0;
+
+          const fixableFindings = findings.filter(f => f.suggested_fix && f.fix_validated);
+
+          for (const finding of fixableFindings) {
+            const filePath = finding.file;
+            const lineNum  = finding.line;
+            const dedupKey = `${finding.rule_id}:${filePath}:${lineNum}`;
+
+            const diffLines = diffLineMap[filePath];
+            if (!diffLines || !diffLines.has(lineNum)) {
+              inlineSkipped++;
+              continue;
+            }
+
+            if (commentedKeys.has(dedupKey)) {
+              inlineSkipped++;
+              continue;
+            }
+
+            const emoji = severityEmoji[finding.severity] || '⚪';
+            const riskLabel = finding.severity === 'CRITICAL' ? '[CRITICAL] Finding'
+              : finding.severity === 'HIGH' ? '[HIGH] Finding'
+              : finding.severity === 'MEDIUM' ? '[MEDIUM] Finding'
+              : '[LOW] Finding';
+
+            const body = [
+              `${emoji} **SecureScan Guardrail: ${riskLabel}**`,
+              '',
+              `**Risk:** ${finding.message}`,
+              '',
+              '**Suggested Fix:**',
+              '```suggestion',
+              finding.suggested_fix,
+              '```',
+              '',
+              `<!-- codescan-key:${dedupKey} -->`,
+            ].join('\n');
+
+            try {
+              await github.rest.pulls.createReviewComment({
+                owner:       context.repo.owner,
+                repo:        context.repo.repo,
+                pull_number: context.issue.number,
+                commit_id:   commitId,
+                path:        filePath,
+                line:        lineNum,
+                body,
+              });
+              inlinePosted++;
+              commentedKeys.add(dedupKey);
+            } catch (err) {
+              console.warn(`Skipped inline comment for ${filePath}:${lineNum} — ${err.message}`);
+              inlineSkipped++;
+            }
+          }
+
+          // ── 5. Post / update the PR-level summary comment ──
+          const bySeverityLines = Object.entries(s.by_severity || {})
+            .map(([sev, count]) => `${severityEmoji[sev] || '⚪'} **${sev}**: ${count}`)
+            .join('\n');
+
+          const topFindings = findings.slice(0, 10).map(f => {
+            const badge = f.fix_validated ? ' ✅ _inline suggestion posted_' : '';
+            return `- ${severityEmoji[f.severity] || ''} \`${f.rule_id}\` in \`${f.file}:${f.line}\` — ${f.message}${badge}`;
+          }).join('\n');
+
+          const inlineBanner = inlinePosted > 0
+            ? `> 💡 **${inlinePosted}** inline fix suggestion(s) posted on the **Files changed** tab.\n> Use **\'Apply suggestion\'** to commit a single fix, or **\'Add suggestion to batch\'** then **\'Commit suggestions\'** to apply several at once.`
+            : '';
+
+          const summaryBody = [
+            '## 🛡️ CodeScan results',
+            '',
+            `Found **${s.total_findings}** issue(s) (${s.duplicates_removed} duplicate(s) removed during aggregation).`,
+            '',
+            bySeverityLines,
+            '',
+            inlineBanner,
+            '',
+            findings.length > 0 ? '### Top findings' : '_No findings — nice work!_',
+            topFindings,
+            '',
+            findings.length > 10 ? `...and ${findings.length - 10} more. See the **Security** tab for the full list.` : '',
+            '',
+            '_Findings are tracked across commits — resolving a conversation on a finding you\'ve accepted as risk will keep the gate from re-blocking it. See `.codescan.yml` to tune per-repo thresholds._',
+          ].filter(line => line !== null && line !== undefined).join('\n');
+
+          const { data: issueComments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo:  context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          const existing = issueComments.find(c => c.body.includes('## 🛡️ CodeScan results'));
+
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner:      context.repo.owner,
+              repo:       context.repo.repo,
+              comment_id: existing.id,
+              body:       summaryBody,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: context.issue.number,
+              body:         summaryBody,
+            });
+          }
+
+    - name: Fail the check if gate was not satisfied
+      if: ${{ steps.gate.outputs.should-fail == 'true' }}
+      shell: bash
+      run: |
+        echo "::error::CodeScan gate failed — ${{ steps.gate.outputs.critical-count }} unresolved finding(s) at or above the '${{ inputs.fail-on }}' threshold."
+        exit 1
